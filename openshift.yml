@@ -1,0 +1,88 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: "apicast-custom-policy"
+message: "APIcast Custom Policy"
+objects:
+
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    annotations:
+    labels:
+      app: apicast
+    name: apicast-custom-policy
+
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    annotations:
+    labels:
+      app: apicast
+    name: apicast-custom-policy
+  spec:
+    output:
+      to:
+        kind: ImageStreamTag
+        name: apicast-custom-policy:1.0
+    source:
+      git:
+        uri: http://bcagitlab.intra.bca.co.id/EAI/3SCALE/Policies/apicast-custom-policy.git
+        ref: 'apicast-custom-policy_20200117_first-deployment'
+      type: Git
+    strategy:
+      type: Source
+      sourceStrategy:
+        from:
+          kind: ImageStreamTag
+          name: 'amp-apicast:${AMP_RELEASE}'
+
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    annotations:
+    labels:
+      app: apicast
+    name: apicast-custom-policies
+  spec:
+    nodeSelector: null
+    output:
+      to:
+        kind: ImageStreamTag
+        name: 'amp-apicast:latest'
+    postCommit:
+      args:
+        - '--test'
+        - '--lazy'
+      command:
+        - bin/apicast
+    resources: {}
+    runPolicy: Serial
+    source:
+      images:
+        - from:
+            kind: ImageStreamTag
+            name: 'apicast-custom-policy:1.0'
+          paths:
+            # copy policy source code into the new image
+            - destinationDir: policies
+              sourcePath: /opt/app-root/policies/customlog 
+      type: Dockerfile
+      dockerfile: |
+        FROM scratch
+        COPY . src
+
+    strategy:
+      dockerStrategy:
+        from:
+          kind: ImageStreamTag
+          name: 'amp-apicast:${AMP_RELEASE}'
+      type: Docker
+    triggers:
+      - type: ConfigChange
+      - type: ImageChange
+
+parameters:
+- name: AMP_RELEASE
+  required: true
+  description: AMP Version (eg. 2.5.0-GA)
